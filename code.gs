@@ -1,5 +1,5 @@
 // --- Global Variables ---
-const ADMIN_EMAIL_FOR_ERRORS = "abela.j@gardenschool.edu.my"; // Set to the admin's email for error notifications, or "" if not needed.
+const ADMIN_EMAIL_FOR_ERRORS = ""; // Set to the admin's email for error notifications, or "" if not needed.
 
 // --- Column Names (MUST match your Sheet headers EXACTLY) ---
 const STATUS_COLUMN_NAME = "Status";
@@ -7,6 +7,11 @@ const ASK_AI_COLUMN_NAME = "Ask AI"; // MUST match the Form question/Sheet Heade
 const EMAIL_COLUMN_NAME = "Email address"; // MUST match the Form question/Sheet Header
 const AI_RESPONSE_COLUMN_NAME = "AI Response";
 const ERROR_DETAILS_COLUMN_NAME = "Error Details"; // Optional
+
+// --- Settings Sheet and Master Prompt ---
+const SETTINGS_SHEET_NAME = "Settings"; // Name of the sheet where the Master Prompt is stored
+const MASTER_PROMPT_CELL = "B1"; // Cell where the master prompt is stored (e.g., B1)
+const MASTER_PROMPT_LABEL_CELL = "A1"; // Cell with the "Master Prompt" label (e.g., A1)
 
 // Function to get API key securely
 function getApiKey() {
@@ -91,12 +96,28 @@ function onFormSubmit(e) {
     if (ADMIN_EMAIL_FOR_ERRORS) MailApp.sendEmail(ADMIN_EMAIL_FOR_ERRORS, "New Generator - Script Error", `Script failed while processing prompt: "${askAiPrompt}" (Row ${newRow}). Error: ${error}`);
   }
 }
+
 // --- Function to call the Gemini API ---
 function callGeminiApi(promptText, apiKey) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`; // Use appropriate model
 
-  // --- Customize the Prompt for Gemini ---
-  const fullPrompt = `Respond to the user's prompt below. Provide a clear, concise, and helpful response. Try not to ask further questions. Prompt: "${promptText}"`;
+  // --- Get the Master Prompt from the "Settings" Sheet ---
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const settingsSheet = ss.getSheetByName(SETTINGS_SHEET_NAME); // Replace "Settings" if you used a different sheet name
+  if (!settingsSheet) {
+    Logger.log("Error: 'Settings' sheet not found. Create a sheet named 'Settings' and add the Master Prompt.");
+    return { error: "Settings sheet not found." };  // Handle the error
+  }
+  const masterPromptCell = settingsSheet.getRange(MASTER_PROMPT_CELL); // Assuming Master Prompt is in B1. Change as needed.
+  const masterPrompt = masterPromptCell.getValue();
+
+  if (!masterPrompt) {
+    Logger.log("Error: Master prompt not found in Settings sheet.");
+    return { error: "Master prompt not found." };  // Handle the error
+  }
+
+  // --- Customize the Prompt for Gemini, Incorporating the Master Prompt ---
+  const fullPrompt = `${masterPrompt} Student Prompt: "${promptText}"`;  // Combine Master Prompt and student's prompt
 
   const requestBody = {
     "contents": [{
@@ -107,9 +128,9 @@ function callGeminiApi(promptText, apiKey) {
     // --- Recommended Safety Settings --- (Adjust as needed for your use case)
     "safetySettings": [
       { "category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_LOW_AND_ABOVE" },
-        { "category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_LOW_AND_ABOVE" },
-        { "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_LOW_AND_ABOVE" },
-        { "category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_LOW_AND_ABOVE" }
+      { "category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_LOW_AND_ABOVE" },
+      { "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_LOW_AND_ABOVE" },
+      { "category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_LOW_AND_ABOVE" }
     ],
     // --- Optional: Generation Configuration ---
     "generationConfig": {
@@ -210,9 +231,36 @@ function sendSelectedAnswers() {
   SpreadsheetApp.getUi().alert("Emails sent (or attempted) successfully!"); // Notify the teacher.
 }
 
+// --- Function to set the master prompt (Menu item) ---
+function setMasterPrompt() {
+  const ui = SpreadsheetApp.getUi();
+  const result = ui.prompt(
+      'Set Master Prompt',
+      'Enter the new master prompt:',
+      ui.ButtonSet.OK_CANCEL);
+
+  // Process the user's response
+  if (result.getSelectedButton() == ui.Button.OK) {
+    const newPrompt = result.getResponseText();
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const settingsSheet = ss.getSheetByName(SETTINGS_SHEET_NAME);
+    if (settingsSheet) {
+      const masterPromptCell = settingsSheet.getRange(MASTER_PROMPT_CELL);
+      masterPromptCell.setValue(newPrompt);
+      SpreadsheetApp.getUi().alert('Master Prompt updated!');
+    } else {
+      SpreadsheetApp.getUi().alert('Error: Settings sheet not found.');
+    }
+  } else {
+    // User canceled the prompt
+    SpreadsheetApp.getUi().alert('Master prompt update canceled.');
+  }
+}
+
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
-  ui.createMenu('Answer Actions')
+  ui.createMenu('Q&A Actions')
       .addItem('Send Selected Answers', 'sendSelectedAnswers') // New menu item
+      .addItem('Set Master Prompt', 'setMasterPrompt') // Add the new menu item
       .addToUi();
 }
