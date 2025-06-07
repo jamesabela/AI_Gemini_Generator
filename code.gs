@@ -1,5 +1,7 @@
 // --- Global Variables ---
-const ADMIN_EMAIL_FOR_ERRORS = "abela.j@gardenschool.edu.my"; // Set to the admin's email for error notifications, or "" if not needed.
+const ADMIN_EMAIL_FOR_ERRORS = ""; // Set to the admin's email for error notifications, or "" if not needed.
+const TEACHER_COMMENT_COLUMN = 6; // "Teacher comment" column - Double-check correct index.
+let emailsSent = 0; // Declare the counter variable (Global Scope)
 
 // --- Column Names (MUST match your Sheet headers EXACTLY) ---
 const STATUS_COLUMN_NAME = "Status";
@@ -179,7 +181,7 @@ function callGeminiApi(promptText, apiKey) {
   }
 }
 
-function sendSelectedStories() {
+function sendSelectedAnswers() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
 
@@ -191,6 +193,7 @@ function sendSelectedStories() {
 
   // Get Send Email? column index
   const sendEmailColIndex = headers.indexOf("Send Email?") + 1;  // Assuming the column is labeled "Send Email?"
+
 
   // --- Get the data from all rows ---
   const data = sheet.getDataRange().getValues();  // Gets all data
@@ -205,12 +208,15 @@ function sendSelectedStories() {
       const studentEmail = data[i][emailColIndex - 1];
       const aiResponse = data[i][aiResponseColIndex - 1];
       const askAiPrompt = data[i][askAiColIndex - 1];  // Get prompt
-      const studentName = data[i][STUDENT_NAME_COLUMN]; // "Your name" column
+      const studentName = data[i][STUDENT_NAME_COLUMN]; //  "Your name" column - Double-check correct index
 
       if (!studentEmail || !aiResponse || !askAiPrompt) {
         Logger.log(`Skipping row ${row} - Missing email, AI response, or prompt.`);
         continue; // Skip to the next row
       }
+
+      // --- Get Teacher Comment ---
+      const teacherComment = data[i][TEACHER_COMMENT_COLUMN]; // Assuming index 6; change if required.
 
       // --- Send the Email ---
       let greeting = 'Hi!';
@@ -218,13 +224,17 @@ function sendSelectedStories() {
         greeting = `Hi ${studentName}!`; // Personalized greeting
       }
 
-      const subject = "AI Response to your prompt!";
-      const body = `${greeting}\n\nYou asked:\n"${askAiPrompt}"\n\nHere's your AI response:\n\n---\n${aiResponse}\n---\n\nEnjoy!`; // Customize as needed
+      let body = `${greeting}\n\nYou asked:\n"${askAiPrompt}"\n\nHere's your AI response:\n\n---\n${aiResponse}\n---\n\nEnjoy!`; // Customize as needed
+
+      if (teacherComment) {
+        body += `\n\nTeacher Comment: ${teacherComment}`; // Add the comment to the email body
+      }
 
       try {
-        MailApp.sendEmail(studentEmail, subject, body);
+        MailApp.sendEmail(studentEmail, "AI Response to your prompt!", body); // Subject is hard coded.
         sheet.getRange(row, statusColIndex).setValue("Sent");
         Logger.log(`AI response sent to ${studentEmail} for row ${row}`);
+        emailsSent++; // Increment the counter
       } catch (error) {
         Logger.log("Error sending email: " + error);
         sheet.getRange(row, statusColIndex).setValue("Error - Send Failed");
@@ -235,7 +245,7 @@ function sendSelectedStories() {
       }
     }
   }
-  SpreadsheetApp.getUi().alert("Emails sent (or attempted) successfully!"); // Notify the teacher.
+  SpreadsheetApp.getUi().alert("Emails sent (or attempted) successfully! Emails sent: " + emailsSent); // Notify the teacher.
 }
 
 // --- Function to set the master prompt (Menu item) ---
@@ -267,7 +277,7 @@ function setMasterPrompt() {
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
   ui.createMenu('Q&A Actions')
-      .addItem('Send Selected Answers', 'sendSelectedStories') // New menu item
+      .addItem('Send Selected Answers', 'sendSelectedAnswers') // New menu item
       .addItem('Set Master Prompt', 'setMasterPrompt') // Add the new menu item
       .addToUi();
 }
