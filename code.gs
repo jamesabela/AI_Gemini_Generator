@@ -1,5 +1,5 @@
 // --- Global Variables ---
-const ADMIN_EMAIL_FOR_ERRORS = ""; // Set to the admin's email for error notifications, or "" if not needed.
+const ADMIN_EMAIL_FOR_ERRORS = "abela.j@gardenschool.edu.my"; // Set to the admin's email for error notifications, or "" if not needed.
 
 // --- Column Names (MUST match your Sheet headers EXACTLY) ---
 const STATUS_COLUMN_NAME = "Status";
@@ -7,6 +7,7 @@ const ASK_AI_COLUMN_NAME = "Ask AI"; // MUST match the Form question/Sheet Heade
 const EMAIL_COLUMN_NAME = "Email address"; // MUST match the Form question/Sheet Header
 const AI_RESPONSE_COLUMN_NAME = "AI Response";
 const ERROR_DETAILS_COLUMN_NAME = "Error Details"; // Optional
+const STUDENT_NAME_COLUMN = 2; //  "Your name" column - Double-check correct index
 
 // --- Settings Sheet and Master Prompt ---
 const SETTINGS_SHEET_NAME = "Settings"; // Name of the sheet where the Master Prompt is stored
@@ -178,7 +179,7 @@ function callGeminiApi(promptText, apiKey) {
   }
 }
 
-function sendSelectedAnswers() {
+function sendSelectedStories() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
 
@@ -204,6 +205,7 @@ function sendSelectedAnswers() {
       const studentEmail = data[i][emailColIndex - 1];
       const aiResponse = data[i][aiResponseColIndex - 1];
       const askAiPrompt = data[i][askAiColIndex - 1];  // Get prompt
+      const studentName = data[i][STUDENT_NAME_COLUMN]; // "Your name" column
 
       if (!studentEmail || !aiResponse || !askAiPrompt) {
         Logger.log(`Skipping row ${row} - Missing email, AI response, or prompt.`);
@@ -211,8 +213,13 @@ function sendSelectedAnswers() {
       }
 
       // --- Send the Email ---
+      let greeting = 'Hi!';
+      if (studentName) {
+        greeting = `Hi ${studentName}!`; // Personalized greeting
+      }
+
       const subject = "AI Response to your prompt!";
-      const body = `Hello!\n\nYou asked:\n"${askAiPrompt}"\n\nHere's your AI response:\n\n---\n${aiResponse}\n---\n\nEnjoy!`; // Customize as needed
+      const body = `${greeting}\n\nYou asked:\n"${askAiPrompt}"\n\nHere's your AI response:\n\n---\n${aiResponse}\n---\n\nEnjoy!`; // Customize as needed
 
       try {
         MailApp.sendEmail(studentEmail, subject, body);
@@ -260,7 +267,7 @@ function setMasterPrompt() {
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
   ui.createMenu('Q&A Actions')
-      .addItem('Send Selected Answers', 'sendSelectedAnswers') // New menu item
+      .addItem('Send Selected Answers', 'sendSelectedStories') // New menu item
       .addItem('Set Master Prompt', 'setMasterPrompt') // Add the new menu item
       .addToUi();
 }
